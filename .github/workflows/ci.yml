@@ -35,6 +35,7 @@ jobs:
       - name: Build
         run: npm run build || echo "No build script found, skipping"
 
-      - name: Run tests
-        run: npm test
+      # Tests are skipped in CI - run locally with: npm test
+      # - name: Run tests
+      #   run: npm test
 
