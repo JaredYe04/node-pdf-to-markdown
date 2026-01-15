@@ -1,6 +1,6 @@
 {
     "name": "node-pdf-to-markdown",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Convert pdf to markdown, support typescript",
     "main": "build/pdf2md.js",
     "types": "types/pdf2md.d.ts",
