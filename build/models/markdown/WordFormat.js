@@ -20,4 +20,12 @@ WordFormat.initEnum({
     startSymbol: '**_',
     endSymbol: '_**',
   },
+  STRIKETHROUGH: {
+    startSymbol: '~~',
+    endSymbol: '~~',
+  },
+  INLINE_CODE: {
+    startSymbol: '`',
+    endSymbol: '`',
+  },
 })

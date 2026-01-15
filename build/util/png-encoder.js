@@ -1,24 +1,25 @@
 /**
- * 简单的PNG编码器，用于将RGB像素数据编码为PNG格式
- * 这是一个最小化的实现，仅支持RGB格式的像素数据
+ * 简单的PNG编码器，用于将RGB或RGBA像素数据编码为PNG格式
+ * 这是一个最小化的实现，支持RGB和RGBA格式的像素数据
  */
 
 /**
- * 将RGB像素数据编码为PNG格式
- * @param {Uint8Array} rgbData - RGB格式的像素数据 (width * height * 3)
+ * 将RGB或RGBA像素数据编码为PNG格式
+ * @param {Uint8Array} pixelData - RGB或RGBA格式的像素数据
  * @param {number} width - 图片宽度
  * @param {number} height - 图片高度
+ * @param {boolean} hasAlpha - 是否有alpha通道，如果为true则使用RGBA格式，否则使用RGB格式
  * @returns {Buffer} PNG格式的图片数据
  */
-function encodePNG(rgbData, width, height) {
+function encodePNG(pixelData, width, height, hasAlpha = false) {
     // PNG文件头
     const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
     
     // 创建IHDR块
-    const ihdr = createIHDR(width, height)
+    const ihdr = createIHDR(width, height, hasAlpha)
     
     // 创建IDAT块（包含图片数据）
-    const idat = createIDAT(rgbData, width, height)
+    const idat = createIDAT(pixelData, width, height, hasAlpha)
     
     // 创建IEND块
     const iend = createIEND()
@@ -36,13 +37,16 @@ function encodePNG(rgbData, width, height) {
 
 /**
  * 创建IHDR块
+ * @param {number} width - 图片宽度
+ * @param {number} height - 图片高度
+ * @param {boolean} hasAlpha - 是否有alpha通道
  */
-function createIHDR(width, height) {
+function createIHDR(width, height, hasAlpha = false) {
     const data = Buffer.allocUnsafe(13)
     data.writeUInt32BE(width, 0)
     data.writeUInt32BE(height, 4)
     data[8] = 8  // bit depth
-    data[9] = 2  // color type (RGB)
+    data[9] = hasAlpha ? 6 : 2  // color type: 2=RGB, 6=RGBA
     data[10] = 0 // compression method
     data[11] = 0 // filter method
     data[12] = 0 // interlace method
@@ -52,23 +56,31 @@ function createIHDR(width, height) {
 
 /**
  * 创建IDAT块（包含压缩的图片数据）
+ * @param {Uint8Array} pixelData - RGB或RGBA格式的像素数据
+ * @param {number} width - 图片宽度
+ * @param {number} height - 图片高度
+ * @param {boolean} hasAlpha - 是否有alpha通道
  */
-function createIDAT(rgbData, width, height) {
-    // 将RGB数据转换为PNG扫描线格式（每行前面加一个filter字节）
-    const scanlineLength = width * 3 + 1
+function createIDAT(pixelData, width, height, hasAlpha = false) {
+    // 将RGB或RGBA数据转换为PNG扫描线格式（每行前面加一个filter字节）
+    const channelsPerPixel = hasAlpha ? 4 : 3
+    const scanlineLength = width * channelsPerPixel + 1
     const imageData = Buffer.allocUnsafe(height * scanlineLength)
     
     for (let y = 0; y < height; y++) {
         const scanlineOffset = y * scanlineLength
         imageData[scanlineOffset] = 0 // filter type: None
         
-        const rgbOffset = y * width * 3
+        const pixelOffset = y * width * channelsPerPixel
         for (let x = 0; x < width; x++) {
-            const srcOffset = rgbOffset + x * 3
-            const dstOffset = scanlineOffset + 1 + x * 3
-            imageData[dstOffset] = rgbData[srcOffset]     // R
-            imageData[dstOffset + 1] = rgbData[srcOffset + 1] // G
-            imageData[dstOffset + 2] = rgbData[srcOffset + 2] // B
+            const srcOffset = pixelOffset + x * channelsPerPixel
+            const dstOffset = scanlineOffset + 1 + x * channelsPerPixel
+            imageData[dstOffset] = pixelData[srcOffset]     // R
+            imageData[dstOffset + 1] = pixelData[srcOffset + 1] // G
+            imageData[dstOffset + 2] = pixelData[srcOffset + 2] // B
+            if (hasAlpha) {
+                imageData[dstOffset + 3] = pixelData[srcOffset + 3] // A
+            }
         }
     }
     

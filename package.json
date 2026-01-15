@@ -13,7 +13,7 @@
         "test": "mocha test --recursive",
         "test:watch": "mocha test --recursive --watch",
         "test:coverage": "nyc npm run test",
-        "batch-convert": "node test/batch-convert.js --image-mode base64",
+        "batch-convert": "node test/batch-convert.js --image-mode save",
         "debug-images": "node test/debug-images.js",
         "check": "npm run lint && npm run test:coverage"
     },

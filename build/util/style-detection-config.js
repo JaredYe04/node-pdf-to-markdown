@@ -7,8 +7,8 @@
 module.exports = {
   // Style confidence thresholds
   styleConfidence: {
-    boldThreshold: 0.5,        // Minimum confidence to mark as bold
-    italicThreshold: 0.5,      // Minimum confidence to mark as italic
+    boldThreshold: 0.3,        // Minimum confidence to mark as bold (lowered for better detection)
+    italicThreshold: 0.3,      // Minimum confidence to mark as italic (lowered for better detection)
   },
 
   // Font style detection weights

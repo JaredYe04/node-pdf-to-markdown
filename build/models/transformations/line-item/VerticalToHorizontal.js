@@ -31,18 +31,64 @@ module.exports = class VerticalToHorizontal extends ToLineItemTransformation {
       const processedLineItems = stream.complete()
       foundVerticals += stream.foundVerticals
       
-      // Re-insert image items
-      const allItems = [...processedLineItems, ...imageItems].sort((a, b) => {
-        const aY = (a && typeof a.y === 'number') ? a.y : 0
-        const bY = (b && typeof b.y === 'number') ? b.y : 0
-        const aX = (a && typeof a.x === 'number') ? a.x : 0
-        const bX = (b && typeof b.x === 'number') ? b.x : 0
+      // Re-insert image items with improved sorting
+      const allItemsWithPos = []
+      
+      // Add processed line items with height info
+      processedLineItems.forEach(item => {
+        const itemY = item.y || 0
+        const itemHeight = item.height || 0
+        allItemsWithPos.push({
+          item: item,
+          y: itemY,
+          topY: itemY,
+          bottomY: itemY - itemHeight,
+          height: itemHeight,
+          x: item.x || 0
+        })
+      })
+      
+      // Add image items with height info
+      imageItems.forEach(imageItem => {
+        const imgCenterY = imageItem.y || 0
+        const imgHeight = imageItem.height || 0
+        allItemsWithPos.push({
+          item: imageItem,
+          y: imgCenterY,
+          topY: imgCenterY + imgHeight / 2,
+          bottomY: imgCenterY - imgHeight / 2,
+          height: imgHeight,
+          x: imageItem.x || 0
+        })
+      })
+      
+      // Improved sorting with overlap detection
+      const allItems = allItemsWithPos.sort((a, b) => {
+        const aY = a.y || 0
+        const bY = b.y || 0
+        const aX = a.x || 0
+        const bX = b.x || 0
         
-        if (Math.abs(aY - bY) > 5) {
+        // Check for vertical overlap
+        const overlapTop = Math.min(a.topY, b.topY)
+        const overlapBottom = Math.max(a.bottomY, b.bottomY)
+        const verticalOverlap = overlapTop - overlapBottom
+        
+        const avgHeight = ((a.height || 0) + (b.height || 0)) / 2
+        const overlapThreshold = avgHeight * 0.2
+        
+        if (verticalOverlap > overlapThreshold) {
+          return aX - bX
+        }
+        
+        const heightBasedThreshold = Math.min(a.height || 5, b.height || 5) * 0.1
+        const separationThreshold = Math.max(heightBasedThreshold, 1)
+        
+        if (Math.abs(aY - bY) > separationThreshold) {
           return bY - aY
         }
         return aX - bX
-      })
+      }).map(i => i.item)
       
       page.items = allItems
     })

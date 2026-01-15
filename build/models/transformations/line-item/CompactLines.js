@@ -73,38 +73,76 @@ module.exports = class CompactLines extends ToLineItemTransformation {
         })
         
         // Re-insert image items in their original positions
-        // Sort all items (lineItems + imageItems) by Y position
+        // Sort all items (lineItems + imageItems) by Y position with improved accuracy
         const allItems = []
         
-        // Create array with position info for sorting
+        // Create array with position info including height for accurate sorting
         const itemsWithPos = []
         
-        // Add line items
+        // Add line items with height information
         lineItems.forEach(item => {
+          const itemY = item.y || 0
+          const itemHeight = item.height || 0
+          // LineItem Y is typically baseline Y, calculate top and bottom
+          const topY = itemY // Text top is near baseline
+          const bottomY = itemY - itemHeight // Text bottom is below baseline
+          
           itemsWithPos.push({
             item: item,
-            y: item.y || 0,
-            x: item.x || 0
+            y: itemY,
+            topY: topY,
+            bottomY: bottomY,
+            height: itemHeight,
+            x: item.x || 0,
+            isImage: false
           })
         })
         
-        // Add image items
+        // Add image items with height information
         imageItems.forEach(imageItem => {
+          const imgCenterY = imageItem.y || 0 // Already center Y from pdf.js
+          const imgHeight = imageItem.height || 0
+          // Image Y is center Y, calculate top and bottom
+          const topY = imgCenterY + imgHeight / 2
+          const bottomY = imgCenterY - imgHeight / 2
+          
           itemsWithPos.push({
             item: imageItem,
-            y: imageItem.y || 0,
-            x: imageItem.x || 0
+            y: imgCenterY,
+            topY: topY,
+            bottomY: bottomY,
+            height: imgHeight,
+            x: imageItem.x || 0,
+            isImage: true
           })
         })
         
-        // Sort by Y position (top to bottom), then by X (left to right)
+        // Improved sorting: consider height ranges and overlaps
         itemsWithPos.sort((a, b) => {
           const aY = (a && typeof a.y === 'number') ? a.y : 0
           const bY = (b && typeof b.y === 'number') ? b.y : 0
           const aX = (a && typeof a.x === 'number') ? a.x : 0
           const bX = (b && typeof b.x === 'number') ? b.x : 0
           
-          if (Math.abs(aY - bY) > 5) {
+          // Check for vertical overlap
+          const overlapTop = Math.min(a.topY, b.topY)
+          const overlapBottom = Math.max(a.bottomY, b.bottomY)
+          const verticalOverlap = overlapTop - overlapBottom
+          
+          // Use dynamic threshold based on item heights
+          const avgHeight = ((a.height || 0) + (b.height || 0)) / 2
+          const overlapThreshold = avgHeight * 0.2
+          
+          if (verticalOverlap > overlapThreshold) {
+            // Items overlap, sort by X
+            return aX - bX
+          }
+          
+          // No significant overlap, sort by Y with dynamic threshold
+          const heightBasedThreshold = Math.min(a.height || 5, b.height || 5) * 0.1
+          const separationThreshold = Math.max(heightBasedThreshold, 1)
+          
+          if (Math.abs(aY - bY) > separationThreshold) {
             return bY - aY // Higher Y value is higher on page
           }
           return aX - bX

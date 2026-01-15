@@ -129,6 +129,8 @@ async function processPdf(pdfPath, config) {
     
     // 如果使用save模式，创建图片目录
     if (config.imageMode === 'save') {
+
+        
       const imageDir = config.imagePath || path.join(config.output, 'images', pdfName)
       ensureDir(imageDir)
       options.imageSavePath = imageDir

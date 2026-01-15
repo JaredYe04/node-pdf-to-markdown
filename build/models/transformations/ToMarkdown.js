@@ -53,8 +53,19 @@ module.exports = class ToMarkdown extends Transformation {
         }
       }
       
-      // Separate blocks and images
-      page.items.forEach(item => {
+      // IMPORTANT: Don't re-sort items here!
+      // The items are already in the correct order from the PDF parsing and transformations.
+      // Re-sorting based on position information can cause images to appear in wrong places
+      // because:
+      // 1. Text items and image items may use different coordinate systems
+      // 2. Position information may be lost or inaccurate after transformations
+      // 3. The original order from GatherBlocks already maintains correct relative positions
+      // 
+      // Instead, we'll use the items in their original order, which should already be correct
+      const sortedItems = page.items
+      
+      // Separate blocks and images (now in sorted order)
+      sortedItems.forEach(item => {
         // Check if item is ImageItem - try multiple ways to detect it
         // First check by constructor name
         let isImage = item instanceof ImageItem || 

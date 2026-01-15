@@ -51,40 +51,111 @@ module.exports = class GatherBlocks extends ToLineItemBlockTransformation {
       }
       
       // Re-insert image items in their original positions
-      // Sort all items (blocks + imageItems) by Y position
+      // Sort all items (blocks + imageItems) by Y position with improved accuracy
       const allItems = []
       
-      // Create a combined array with position info
+      // Create a combined array with position info including height for accurate sorting
       const itemsWithPos = []
       
-      // Add blocks with their position
+      // Add blocks with their position and height range
       blocks.forEach(block => {
         if (block.items && block.items.length > 0) {
+          // Calculate block's Y range (top to bottom in PDF coordinates)
+          // In PDF: Y increases upward, so higher Y = higher on page
+          // Text items typically use baseline Y, so:
+          // - topY (highest point) = baseline Y + some offset
+          // - bottomY (lowest point) = baseline Y - height
+          let topY = block.items[0].y // Start with first item's Y (baseline)
+          let bottomY = block.items[0].y
+          let maxHeight = 0
+          
+          block.items.forEach(item => {
+            const itemBaselineY = item.y
+            const itemHeight = item.height || 0
+            // In PDF coordinates: baseline Y is the reference
+            // Top of text is approximately at baseline (or slightly above for some fonts)
+            // Bottom of text is at baseline - height
+            const itemTopY = itemBaselineY // Text top is near baseline
+            const itemBottomY = itemBaselineY - itemHeight // Text bottom is below baseline
+            
+            topY = Math.max(topY, itemTopY) // Higher Y is higher on page
+            bottomY = Math.min(bottomY, itemBottomY) // Lower Y is lower on page
+            maxHeight = Math.max(maxHeight, itemHeight)
+          })
+          
+          // Use center Y for sorting
+          const centerY = (topY + bottomY) / 2
           itemsWithPos.push({
             item: block,
-            y: block.items[0].y,
-            x: block.items[0].x
+            y: centerY,
+            topY: topY,
+            bottomY: bottomY,
+            height: maxHeight,
+            x: block.items[0].x,
+            isBlock: true
           })
         }
       })
       
-      // Add image items with their position
+      // Add image items with their position and height
       imageItems.forEach(imageItem => {
         // Ensure imageItem has required properties
         if (imageItem && (imageItem.imageData || imageItem.constructor?.name === 'ImageItem')) {
+          const imgCenterY = imageItem.y || 0 // Already center Y from pdf.js
+          const imgHeight = imageItem.height || 0
+          // In PDF coordinates: center Y is reference
+          // Top of image = center Y + height/2
+          // Bottom of image = center Y - height/2
+          const topY = imgCenterY + imgHeight / 2
+          const bottomY = imgCenterY - imgHeight / 2
+          
           itemsWithPos.push({
             item: imageItem,
-            y: imageItem.y || 0,
-            x: imageItem.x || 0
+            y: imgCenterY, // Center Y from pdf.js
+            topY: topY,
+            bottomY: bottomY,
+            height: imgHeight,
+            x: imageItem.x || 0,
+            isBlock: false
           })
         }
       })
       
-      // Sort by Y position (top to bottom), then by X (left to right)
+      // Improved sorting: consider height ranges and overlaps for accurate positioning
       itemsWithPos.sort((a, b) => {
-        if (Math.abs(a.y - b.y) > 5) {
-          return b.y - a.y // Higher Y is higher on page
+        // Check if items overlap vertically (considering their heights)
+        // In PDF coordinates: higher Y = higher on page
+        const aTop = a.topY
+        const aBottom = a.bottomY
+        const bTop = b.topY
+        const bBottom = b.bottomY
+        
+        // Calculate vertical overlap
+        // Overlap exists if: min(top) > max(bottom)
+        const overlapTop = Math.min(aTop, bTop)
+        const overlapBottom = Math.max(aBottom, bBottom)
+        const verticalOverlap = overlapTop - overlapBottom // Positive if overlapping
+        
+        // If items overlap significantly, maintain relative X order
+        // Use 20% of average height as overlap threshold
+        const avgHeight = ((a.height || 0) + (b.height || 0)) / 2
+        const overlapThreshold = avgHeight * 0.2
+        
+        if (verticalOverlap > overlapThreshold) {
+          // Items overlap vertically, sort by X position to maintain left-to-right order
+          return a.x - b.x
         }
+        
+        // No significant overlap, sort by center Y position
+        // Use dynamic threshold based on item heights for better accuracy
+        const heightBasedThreshold = Math.min(a.height || 5, b.height || 5) * 0.1
+        const separationThreshold = Math.max(heightBasedThreshold, 1) // At least 1 pixel
+        
+        if (Math.abs(a.y - b.y) > separationThreshold) {
+          return b.y - a.y // Higher Y is higher on page (PDF coordinates)
+        }
+        
+        // Very close Y positions (within threshold), sort by X
         return a.x - b.x
       })
       

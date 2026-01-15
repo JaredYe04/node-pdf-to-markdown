@@ -39,10 +39,23 @@ module.exports = class ToTextBlocks extends Transformation {
         } else {
           // TODO category to type (before have no unknowns, have paragraph)
           const category = block.type ? block.type.name : 'Unknown'
-          textItems.push({
+          // Preserve position information from the block if available
+          // This helps maintain correct order of images and text blocks
+          const textBlock = {
             category: category,
             text: blockToText(block),
-          })
+          }
+          // Try to preserve Y position from the block
+          if (block.items && block.items.length > 0) {
+            // For LineItemBlock, use the first item's Y position
+            textBlock.y = block.items[0].y
+            textBlock.x = block.items[0].x
+          } else if (typeof block.y === 'number') {
+            // If block has direct Y position
+            textBlock.y = block.y
+            textBlock.x = block.x
+          }
+          textItems.push(textBlock)
         }
       })
       

@@ -138,6 +138,133 @@ BlockType.initEnum({
       return linesToText(block.items, false)
     },
   },
+  TABLE: {
+    mergeToBlock: true,
+    toText (block /*: LineItemBlock */) /*: string */ {
+      // Convert table lines to markdown table format
+      const lines = block.items.map(item => {
+        if (!item.words || item.words.length === 0) {
+          return ''
+        }
+        return item.words.map(w => w.string).join(' ')
+      }).filter(line => line.trim().length > 0)
+      
+      if (lines.length === 0) {
+        return ''
+      }
+      
+      // Try to detect if it's already in markdown table format
+      const hasPipes = lines.some(line => line.includes('|'))
+      if (hasPipes) {
+        // Already has pipes, just return as-is with proper formatting
+        return lines.join('\n')
+      }
+      
+      // Handle single-line table (common in PDFs)
+      if (lines.length === 1) {
+        const singleLine = lines[0]
+        // Try to split by common patterns
+        // Look for patterns like "名称 类型 是否支持 备注 标题 结构 ✅ 多级标题..."
+        const words = singleLine.split(/\s+/).filter(w => w.trim().length > 0)
+        
+        // Try to detect column boundaries by looking for keywords or patterns
+        // Common table pattern: header words followed by data
+        const potentialColumns = []
+        let currentColumn = []
+        
+        // Simple heuristic: group words that might be columns
+        // Look for patterns like "名称", "类型", "是否支持", "备注" as headers
+        const headerKeywords = ['名称', '类型', '支持', '备注', '标题', '公式', '表格', '列表', '模块', '覆盖']
+        
+        words.forEach((word, index) => {
+          const isHeader = headerKeywords.some(kw => word.includes(kw))
+          const isEmoji = /[✅⚠️❌]/u.test(word)
+          const isShort = word.length <= 10
+          
+          // If we find a header keyword or emoji, it might be a column boundary
+          if (isHeader && currentColumn.length > 0) {
+            potentialColumns.push(currentColumn.join(' '))
+            currentColumn = [word]
+          } else if (isEmoji && currentColumn.length > 2) {
+            // Emoji often marks end of a column
+            currentColumn.push(word)
+            potentialColumns.push(currentColumn.join(' '))
+            currentColumn = []
+          } else {
+            currentColumn.push(word)
+          }
+        })
+        
+        if (currentColumn.length > 0) {
+          potentialColumns.push(currentColumn.join(' '))
+        }
+        
+        // If we found multiple potential columns, treat as table
+        if (potentialColumns.length >= 2) {
+          const maxCols = potentialColumns.length
+          const tableLines = []
+          const rowText = '| ' + potentialColumns.map(col => col.trim() || ' ').join(' | ') + ' |'
+          tableLines.push(rowText)
+          const separator = '| ' + Array(maxCols).fill('---').join(' | ') + ' |'
+          tableLines.push(separator)
+          return tableLines.join('\n')
+        }
+        
+        // Fallback: try splitting by fixed patterns
+        const parts = singleLine.split(/\s{2,}|\t|(名称|类型|支持|备注)/)
+        const filteredParts = parts.filter(p => p && p.trim().length > 0 && !['名称', '类型', '支持', '备注'].includes(p.trim()))
+        if (filteredParts.length >= 4) {
+          const maxCols = Math.min(4, filteredParts.length)
+          const tableLines = []
+          const rowText = '| ' + filteredParts.slice(0, maxCols).map(col => col.trim() || ' ').join(' | ') + ' |'
+          tableLines.push(rowText)
+          const separator = '| ' + Array(maxCols).fill('---').join(' | ') + ' |'
+          tableLines.push(separator)
+          return tableLines.join('\n')
+        }
+      }
+      
+      // Convert to markdown table format (multi-line)
+      // Split by multiple spaces or tabs to detect columns
+      const rows = lines.map(line => {
+        const columns = line.split(/\s{2,}|\t/).filter(col => col.trim().length > 0)
+        if (columns.length === 0) {
+          columns.push(line.trim())
+        }
+        return columns
+      })
+      
+      if (rows.length === 0) {
+        return ''
+      }
+      
+      // Find max column count
+      const maxCols = Math.max(...rows.map(row => row.length))
+      
+      // Normalize rows to have same column count
+      const normalizedRows = rows.map(row => {
+        while (row.length < maxCols) {
+          row.push('')
+        }
+        return row.slice(0, maxCols)
+      })
+      
+      // Generate markdown table
+      const tableLines = []
+      normalizedRows.forEach((row, index) => {
+        const rowText = '| ' + row.map(col => col.trim() || ' ').join(' | ') + ' |'
+        tableLines.push(rowText)
+        
+        // Add separator after first row
+        if (index === 0 && normalizedRows.length > 1) {
+          const separator = '| ' + Array(maxCols).fill('---').join(' | ') + ' |'
+          tableLines.push(separator)
+        }
+      })
+      
+      return tableLines.join('\n')
+    },
+  },
   PARAGRAPH: {
     toText (block /*: LineItemBlock */) /*: string */ {
       return linesToText(block.items, false)

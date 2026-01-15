@@ -505,13 +505,48 @@ exports.parse = async function parse(buffer, callbacks) {
                                 // If we couldn't get valid encoded image data, try to encode raw pixel data as PNG
                                 if (!imageData && imageObj.data && imageObj.width && imageObj.height) {
                                     try {
-                                        const rgbData = imageObj.data
-                                        const expectedLength = imageObj.width * imageObj.height * 3
+                                        const pixelData = imageObj.data
+                                        const expectedLengthRGB = imageObj.width * imageObj.height * 3
+                                        const expectedLengthRGBA = imageObj.width * imageObj.height * 4
                                         
-                                        // Check if data length matches RGB format
-                                        if (rgbData.length === expectedLength) {
-                                            // Encode RGB pixel data as PNG
-                                            imageData = encodePNG(rgbData, imageObj.width, imageObj.height)
+                                        // Detect alpha channel by checking data length and image properties
+                                        let hasAlpha = false
+                                        let shouldProcess = true
+                                        
+                                        // Method 1: Check number of components (most reliable)
+                                        if (imageObj.numComps) {
+                                            // If we have 4 components, it's likely RGBA
+                                            if (imageObj.numComps === 4) {
+                                                hasAlpha = true
+                                            } else if (imageObj.numComps === 3) {
+                                                hasAlpha = false
+                                            }
+                                        }
+                                        
+                                        // Method 2: Check data length (fallback if numComps not available)
+                                        if (pixelData.length === expectedLengthRGBA) {
+                                            hasAlpha = true
+                                        } else if (pixelData.length === expectedLengthRGB) {
+                                            hasAlpha = false
+                                        } else {
+                                            // Data length doesn't match expected formats, skip
+                                            shouldProcess = false
+                                        }
+                                        
+                                        // Method 3: Check colorSpace if available (additional validation)
+                                        if (imageObj.colorSpace && shouldProcess) {
+                                            const colorSpace = imageObj.colorSpace.name || String(imageObj.colorSpace)
+                                            // DeviceRGB = RGB, DeviceRGBA = RGBA
+                                            if (colorSpace.includes('DeviceRGBA') || colorSpace.includes('RGBA')) {
+                                                hasAlpha = true
+                                            } else if (colorSpace.includes('DeviceRGB') || colorSpace.includes('RGB')) {
+                                                hasAlpha = false
+                                            }
+                                        }
+                                        
+                                        // Encode pixel data as PNG with appropriate format
+                                        if (shouldProcess && (pixelData.length === expectedLengthRGB || pixelData.length === expectedLengthRGBA)) {
+                                            imageData = encodePNG(pixelData, imageObj.width, imageObj.height, hasAlpha)
                                             imageFormat = 'png'
                                             // Verify the encoded PNG is valid
                                             if (imageData && imageData.length > 8) {
@@ -525,35 +560,6 @@ exports.parse = async function parse(buffer, callbacks) {
                                                 }
                                             } else {
                                                 imageData = null
-                                            }
-                                        } else {
-                                            // Data length doesn't match RGB format, might be RGBA or other format
-                                            // Try RGBA format (width * height * 4)
-                                            const expectedLengthRGBA = imageObj.width * imageObj.height * 4
-                                            if (rgbData.length === expectedLengthRGBA) {
-                                                // Convert RGBA to RGB
-                                                const rgbDataConverted = new Uint8Array(imageObj.width * imageObj.height * 3)
-                                                for (let i = 0; i < imageObj.width * imageObj.height; i++) {
-                                                    rgbDataConverted[i * 3] = rgbData[i * 4]
-                                                    rgbDataConverted[i * 3 + 1] = rgbData[i * 4 + 1]
-                                                    rgbDataConverted[i * 3 + 2] = rgbData[i * 4 + 2]
-                                                }
-                                                // Encode RGB pixel data as PNG
-                                                imageData = encodePNG(rgbDataConverted, imageObj.width, imageObj.height)
-                                                imageFormat = 'png'
-                                                // Verify the encoded PNG is valid
-                                                if (imageData && imageData.length > 8) {
-                                                    const isValidPNG = imageData[0] === 0x89 && 
-                                                                       imageData[1] === 0x50 && 
-                                                                       imageData[2] === 0x4E && 
-                                                                       imageData[3] === 0x47
-                                                    if (!isValidPNG) {
-                                                        // Encoding failed, skip this image
-                                                        imageData = null
-                                                    }
-                                                } else {
-                                                    imageData = null
-                                                }
                                             }
                                         }
                                     } catch (e) {
@@ -596,7 +602,18 @@ exports.parse = async function parse(buffer, callbacks) {
                                     const width = Math.sqrt(a * a + c * c) * imgWidth
                                     const height = Math.sqrt(b * b + d * d) * imgHeight
                                     const x = e
-                                    const y = viewport.height - (f + height)
+                                    
+                                    // CRITICAL: Calculate center Y coordinate for accurate positioning
+                                    // In PDF coordinates, Y increases upward from bottom
+                                    // The transform matrix's f value typically represents the bottom-left corner
+                                    // To ensure accurate sorting with text items, we use the center Y coordinate
+                                    // This provides a stable reference point that accounts for image height
+                                    const bottomY = f
+                                    const centerY = bottomY + height / 2
+                                    
+                                    // Store both center Y (for sorting) and original bottom Y (for reference)
+                                    // We'll use centerY for positioning to match text line centers
+                                    const y = centerY
                                     
                                     imageCounter++
                                     const imageItemName = `image${imageCounter}`
@@ -626,14 +643,73 @@ exports.parse = async function parse(buffer, callbacks) {
             // console.warn(`Page ${j}, Failed to parse operator list for images:`, err.message)
         }
         
-        // Combine text items and image items, sort by Y position (top to bottom)
-        const allItems = [...textItems, ...imageItems].sort((a, b) => {
-            // Sort by Y position (top to bottom), then by X (left to right)
-            if (Math.abs(a.y - b.y) > 5) {
+        // Combine text items and image items, sort by Y position with improved accuracy
+        // Create array with position info including height for accurate sorting
+        const itemsWithPos = []
+        
+        // Add text items with height info
+        textItems.forEach(item => {
+            const itemY = item.y || 0
+            const itemHeight = item.height || 0
+            // Text Y is typically baseline, calculate top and bottom
+            const topY = itemY // Text top is near baseline
+            const bottomY = itemY - itemHeight // Text bottom is below baseline
+            
+            itemsWithPos.push({
+                item: item,
+                y: itemY,
+                topY: topY,
+                bottomY: bottomY,
+                height: itemHeight,
+                x: item.x || 0
+            })
+        })
+        
+        // Add image items with height info
+        imageItems.forEach(imageItem => {
+            const imgCenterY = imageItem.y || 0 // Already center Y from above
+            const imgHeight = imageItem.height || 0
+            // Image Y is center Y, calculate top and bottom
+            const topY = imgCenterY + imgHeight / 2
+            const bottomY = imgCenterY - imgHeight / 2
+            
+            itemsWithPos.push({
+                item: imageItem,
+                y: imgCenterY,
+                topY: topY,
+                bottomY: bottomY,
+                height: imgHeight,
+                x: imageItem.x || 0
+            })
+        })
+        
+        // Improved sorting: consider height ranges and overlaps
+        const allItems = itemsWithPos.sort((a, b) => {
+            // Check for vertical overlap
+            const overlapTop = Math.min(a.topY, b.topY)
+            const overlapBottom = Math.max(a.bottomY, b.bottomY)
+            const verticalOverlap = overlapTop - overlapBottom
+            
+            // Use dynamic threshold based on item heights
+            const avgHeight = ((a.height || 0) + (b.height || 0)) / 2
+            const overlapThreshold = avgHeight * 0.2
+            
+            if (verticalOverlap > overlapThreshold) {
+                // Items overlap, sort by X
+                return a.x - b.x
+            }
+            
+            // No significant overlap, sort by Y with dynamic threshold
+            const heightBasedThreshold = Math.min(a.height || 5, b.height || 5) * 0.1
+            const separationThreshold = Math.max(heightBasedThreshold, 1)
+            
+            if (Math.abs(a.y - b.y) > separationThreshold) {
                 return b.y - a.y // Higher Y value is higher on page
             }
+            
+            // Very close Y positions, sort by X
             return a.x - b.x
-        })
+        }).map(i => i.item)
         
         pages[page.pageNumber - 1].items = allItems
         pageParsed(pages)

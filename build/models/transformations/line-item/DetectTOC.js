@@ -231,6 +231,13 @@ function findHeadlineItems (page, headline) {
   const headlineFinder = new HeadlineFinder({ headline })
   var lineIndex = 0
   for (var line of page.items) {
+    // Filter out ImageItems and other items that don't have a text() method
+    if (line instanceof ImageItem || (line.constructor && line.constructor.name === 'ImageItem') ||
+        (line && typeof line === 'object' && line.imageData) ||
+        !line || typeof line.text !== 'function') {
+      lineIndex++
+      continue
+    }
     const headlineItems = headlineFinder.consume(line)
     if (headlineItems) {
       return { lineIndex, headlineItems }
@@ -270,6 +277,12 @@ function findPageAndLineFromHeadline (pages, tocLink, heightRange, fromPage, toP
     const page = pages[i - 1]
     if (page) {
       const lineIndex = page.items.findIndex(line => {
+        // Filter out ImageItems and other items that don't have a text() method
+        if (line instanceof ImageItem || (line.constructor && line.constructor.name === 'ImageItem') ||
+            (line && typeof line === 'object' && line.imageData) ||
+            !line || typeof line.text !== 'function') {
+          return false
+        }
         if (!line.type && !line.annotation && line.height >= heightRange.min && line.height <= heightRange.max) {
           const match = wordMatch(linkText, line.text())
           return match >= 0.5
