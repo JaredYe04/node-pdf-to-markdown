@@ -15,7 +15,7 @@ const ToMarkdown = require('../models/transformations/ToMarkdown')
 
 const ParseResult = require('../models/ParseResult')
 
-exports.makeTransformations = fontMap => [
+exports.makeTransformations = (fontMap, imageOptions = {}) => [
     new CalculateGlobalStats(fontMap),
     new CompactLines(),
     new RemoveRepetitiveElements(),
@@ -29,7 +29,7 @@ exports.makeTransformations = fontMap => [
     new DetectListLevels(),
 
     new ToTextBlocks(),
-    new ToMarkdown()
+    new ToMarkdown(imageOptions)
 ]
 
 exports.transform = (pages, transformations) => {

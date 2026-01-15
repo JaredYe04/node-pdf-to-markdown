@@ -2,6 +2,7 @@
 
 const ToLineItemTransformation = require('../ToLineItemTransformation')
 const ParseResult = require('../../ParseResult')
+const ImageItem = require('../../ImageItem')
 const { REMOVED_ANNOTATION } = require('../../Annotation')
 
 const { isDigit } = require('../../../util/string-functions')
@@ -35,7 +36,13 @@ module.exports = class RemoveRepetitiveElements extends ToLineItemTransformation
     const minLineHashRepetitions = {}
     const maxLineHashRepetitions = {}
     parseResult.pages.forEach(page => {
-      const minMaxItems = page.items.reduce((itemStore, item) => {
+      // Filter out ImageItems before processing
+      const textItems = page.items.filter(item => 
+        !(item instanceof ImageItem || (item.constructor && item.constructor.name === 'ImageItem') ||
+          (item && typeof item === 'object' && item.imageData))
+      )
+      
+      const minMaxItems = textItems.reduce((itemStore, item) => {
         if (item.y < itemStore.minY) {
           itemStore.minElements = [item]
           itemStore.minY = item.y
@@ -56,8 +63,18 @@ module.exports = class RemoveRepetitiveElements extends ToLineItemTransformation
         maxElements: [],
       })
 
-      const minLineHash = hashCodeIgnoringSpacesAndNumbers(minMaxItems.minElements.reduce((combinedString, item) => combinedString + item.text().toUpperCase(), ''))
-      const maxLineHash = hashCodeIgnoringSpacesAndNumbers(minMaxItems.maxElements.reduce((combinedString, item) => combinedString + item.text().toUpperCase(), ''))
+      const minLineHash = minMaxItems.minElements.length > 0
+        ? hashCodeIgnoringSpacesAndNumbers(minMaxItems.minElements.reduce((combinedString, item) => {
+            const text = item.text ? (typeof item.text === 'function' ? item.text() : item.text) : ''
+            return combinedString + text.toUpperCase()
+          }, ''))
+        : 0
+      const maxLineHash = minMaxItems.maxElements.length > 0
+        ? hashCodeIgnoringSpacesAndNumbers(minMaxItems.maxElements.reduce((combinedString, item) => {
+            const text = item.text ? (typeof item.text === 'function' ? item.text() : item.text) : ''
+            return combinedString + text.toUpperCase()
+          }, ''))
+        : 0
       pageStore.push({
         minElements: minMaxItems.minElements,
         maxElements: minMaxItems.maxElements,

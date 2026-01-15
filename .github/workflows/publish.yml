@@ -1,0 +1,255 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+      - name: Sync with remote (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # 确保获取最新的远程更改
+          echo "🔄 Fetching latest changes from remote..."
+          git fetch origin main
+          git checkout main
+          git pull origin main --rebase || git pull origin main
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Bump version (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # 获取本地 package.json 版本（从 GitHub 拉取后的版本）
+          LOCAL_VERSION=$(node -p "require('./package.json').version")
+          echo "📦 Local package.json version (after sync): $LOCAL_VERSION"
+          
+          # 获取 npm 上的最新版本
+          echo "🔍 Checking npm registry for latest version..."
+          NPM_VERSION=$(npm view pdf2md-ts version 2>/dev/null || echo "")
+          
+          if [ -z "$NPM_VERSION" ]; then
+            echo "📦 No existing version on npm, starting fresh"
+            BASE_VERSION=$LOCAL_VERSION
+          else
+            echo "📦 Latest npm version: $NPM_VERSION"
+            echo "🔍 Comparing versions: local=$LOCAL_VERSION vs npm=$NPM_VERSION"
+            
+            # 使用更可靠的版本比较
+            COMPARE=$(node -e "
+              const local = '$LOCAL_VERSION'.split('.').map(Number);
+              const npm = '$NPM_VERSION'.split('.').map(Number);
+              console.log('Local:', local.join('.'));
+              console.log('NPM:', npm.join('.'));
+              for (let i = 0; i < 3; i++) {
+                if (local[i] > npm[i]) {
+                  console.log('local');
+                  process.exit(0);
+                } else if (local[i] < npm[i]) {
+                  console.log('npm');
+                  process.exit(0);
+                }
+              }
+              console.log('equal');
+            ")
+            
+            echo "🔍 Comparison result: $COMPARE"
+            
+            if [ "$COMPARE" = "npm" ] || [ "$COMPARE" = "equal" ]; then
+              echo "⚠️  npm version ($NPM_VERSION) is newer or equal to local ($LOCAL_VERSION)"
+              echo "📝 Updating local package.json to match npm version..."
+              npm version $NPM_VERSION --no-git-tag-version --allow-same-version
+              BASE_VERSION=$NPM_VERSION
+              echo "✅ Updated to: $BASE_VERSION"
+            else
+              echo "✅ Local version ($LOCAL_VERSION) is newer than npm ($NPM_VERSION)"
+              BASE_VERSION=$LOCAL_VERSION
+            fi
+          fi
+          
+          echo "📦 Starting from version: $BASE_VERSION"
+          echo "📝 Verifying current package.json version..."
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "📦 Current package.json version: $CURRENT"
+          
+          if [ "$CURRENT" != "$BASE_VERSION" ]; then
+            echo "⚠️  Version mismatch! Updating to $BASE_VERSION..."
+            npm version $BASE_VERSION --no-git-tag-version --allow-same-version
+          fi
+          
+          # 递增版本
+          echo "🆕 Incrementing version (${{ github.event.inputs.version }})..."
+          npm version ${{ github.event.inputs.version }} --no-git-tag-version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "🆕 New version after increment: $NEW_VERSION"
+          
+          # 检查 npm 上是否已存在该版本
+          if npm view pdf2md-ts@$NEW_VERSION version > /dev/null 2>&1; then
+            echo "⚠️  Version $NEW_VERSION already exists on npm"
+            echo "🔄 Attempting to increment again..."
+            # 再次递增版本
+            npm version ${{ github.event.inputs.version }} --no-git-tag-version
+            NEW_VERSION=$(node -p "require('./package.json').version")
+            echo "🆕 Updated version: $NEW_VERSION"
+            
+            # 再次检查
+            if npm view pdf2md-ts@$NEW_VERSION version > /dev/null 2>&1; then
+              echo "❌ Error: Version $NEW_VERSION also exists on npm."
+              echo "💡 Please manually update package.json to a version higher than the latest npm version."
+              if [ -n "$NPM_VERSION" ]; then
+                echo "📦 Latest npm version: $NPM_VERSION"
+              fi
+              exit 1
+            fi
+          fi
+          
+          echo "✅ Version $NEW_VERSION is available for publishing"
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Bump version (release)
+        if: github.event_name == 'release'
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Release version: $VERSION"
+          
+          # 检查 npm 上是否已存在该版本
+          if npm view pdf2md-ts@$VERSION version > /dev/null 2>&1; then
+            echo "⚠️  Warning: Version $VERSION already exists on npm"
+            echo "Using --allow-same-version to update package.json"
+          fi
+          
+          npm version $VERSION --no-git-tag-version --allow-same-version
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Verify version before publish
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "📦 Preparing to publish version: $VERSION"
+          
+          # 最终检查：确保版本不存在
+          if npm view pdf2md-ts@$VERSION version > /dev/null 2>&1; then
+            echo "❌ Error: Version $VERSION already exists on npm registry"
+            echo "Cannot publish duplicate version. Please update package.json with a new version."
+            exit 1
+          fi
+          
+          echo "✅ Version $VERSION is ready to publish"
+
+      - name: Build
+        run: npm run build || echo "No build script found, skipping"
+
+      - name: Run tests
+        run: npm test
+
+      - name: Publish to npm
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create Git tag and push (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          # 添加版本变更
+          git add package.json package-lock.json
+          
+          # 检查是否有变更需要提交
+          if git diff --staged --quiet; then
+            echo "⚠️  No changes to commit (version may already be updated)"
+          else
+            git commit -m "chore: bump version to ${{ env.VERSION }}"
+          fi
+          
+          # 在 push 之前先 pull，使用 rebase 避免合并提交
+          echo "🔄 Pulling latest changes from remote..."
+          git fetch origin main
+          git pull origin main --rebase || {
+            echo "⚠️  Rebase failed, trying merge..."
+            git pull origin main --no-edit || {
+              echo "❌ Failed to sync with remote. This may happen if:"
+              echo "   1. Remote has conflicting changes"
+              echo "   2. Version was already updated in another commit"
+              echo "💡 Solution: Check remote repository and resolve conflicts manually"
+              exit 1
+            }
+          }
+          
+          # 创建 tag（如果不存在）
+          if git rev-parse "v${{ env.VERSION }}" >/dev/null 2>&1; then
+            echo "⚠️  Tag v${{ env.VERSION }} already exists locally, skipping tag creation"
+          else
+            git tag -a "v${{ env.VERSION }}" -m "Release v${{ env.VERSION }}"
+          fi
+          
+          # Push 代码
+          echo "📤 Pushing changes to remote..."
+          git push origin HEAD:main || {
+            echo "❌ Failed to push to main branch"
+            echo "💡 This may happen if remote has new commits. Try running the workflow again."
+            exit 1
+          }
+          
+          # Push tag（检查远程是否已存在）
+          if git ls-remote --tags origin | grep -q "refs/tags/v${{ env.VERSION }}$"; then
+            echo "ℹ️  Tag v${{ env.VERSION }} already exists on remote, skipping tag push"
+          else
+            git push origin "v${{ env.VERSION }}" || {
+              echo "⚠️  Failed to push tag, but code was pushed successfully"
+            }
+          fi
+          
+          echo "✅ Successfully pushed version ${{ env.VERSION }}"
+
+      - name: Create GitHub Release (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Release v${{ env.VERSION }}
+          body: |
+            ## Changes in v${{ env.VERSION }}
+            
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+          draft: false
+          prerelease: false
+

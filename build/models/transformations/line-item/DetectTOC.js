@@ -2,6 +2,7 @@
 
 const ToLineItemTransformation = require('../ToLineItemTransformation')
 const ParseResult = require('../../ParseResult')
+const ImageItem = require('../../ImageItem')
 const LineItem = require('../../LineItem')
 const Word = require('../../Word')
 const HeadlineFinder = require('../../HeadlineFinder')
@@ -30,8 +31,13 @@ module.exports = class DetectTOC extends ToLineItemTransformation {
       const pageTocLinks = []
       var lastWordsWithoutNumber
       var lastLine
+      // Filter out ImageItems before processing
+      const textItems = page.items.filter(item => 
+        !(item instanceof ImageItem || (item.constructor && item.constructor.name === 'ImageItem') ||
+          (item && typeof item === 'object' && item.imageData))
+      )
       // find lines with words containing only "." ...
-      const tocLines = page.items.filter(line => line.words.includes(word => hasOnly(word.string, '.')))
+      const tocLines = textItems.filter(line => line.words && line.words.some(word => hasOnly(word.string, '.')))
       // ... and ending with a number per page
       tocLines.forEach(line => {
         var words = line.words.filter(word => !hasOnly(word.string, '.'))
@@ -74,7 +80,7 @@ module.exports = class DetectTOC extends ToLineItemTransformation {
       })
 
       // page has been processed
-      if (lineItemsWithDigits * 100 / page.items.length > 75) {
+      if (lineItemsWithDigits * 100 / textItems.length > 75) {
         tocPages.push(page.index + 1)
         lastTocPage = page
         linkLeveler.levelPageItems(pageTocLinks)

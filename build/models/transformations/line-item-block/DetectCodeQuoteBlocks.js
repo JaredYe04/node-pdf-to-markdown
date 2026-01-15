@@ -2,6 +2,7 @@
 
 const ToLineItemBlockTransformation = require('../ToLineItemBlockTransformation')
 const ParseResult = require('../../ParseResult')
+const ImageItem = require('../../ImageItem')
 const { DETECTED_ANNOTATION } = require('../../Annotation')
 const BlockType = require('../../markdown/BlockType')
 const { minXFromBlocks } = require('../../../util/page-item-functions')
@@ -16,9 +17,15 @@ module.exports = class DetectCodeQuoteBlocks extends ToLineItemBlockTransformati
     const { mostUsedHeight } = parseResult.globals
     var foundCodeItems = 0
     parseResult.pages.forEach(page => {
-      var minX = minXFromBlocks(page.items)
-      page.items.forEach(block => {
-        if (!block.type && looksLikeCodeBlock(minX, block.items, mostUsedHeight)) {
+      // Filter out ImageItems - only process LineItemBlocks
+      const blocks = page.items.filter(item => 
+        !(item instanceof ImageItem || (item.constructor && item.constructor.name === 'ImageItem') ||
+          (item && typeof item === 'object' && item.imageData))
+      )
+      
+      var minX = minXFromBlocks(blocks)
+      blocks.forEach(block => {
+        if (!block.type && block.items && looksLikeCodeBlock(minX, block.items, mostUsedHeight)) {
           block.annotation = DETECTED_ANNOTATION
           block.type = BlockType.CODE
           foundCodeItems++

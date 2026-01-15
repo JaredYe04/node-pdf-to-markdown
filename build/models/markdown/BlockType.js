@@ -72,42 +72,44 @@ BlockType.initEnum({
     headline: true,
     headlineLevel: 1,
     toText (block /*: LineItemBlock */) /*: string */ {
-      return '# ' + linesToText(block.items, true)
+      // Allow inline formats (bold/italic) in headers
+      // Markdown allows: ### **Bold Title** and ### *Italic Title*
+      return '# ' + linesToText(block.items, false)
     },
   },
   H2: {
     headline: true,
     headlineLevel: 2,
     toText (block /*: LineItemBlock */) /*: string */ {
-      return '## ' + linesToText(block.items, true)
+      return '## ' + linesToText(block.items, false)
     },
   },
   H3: {
     headline: true,
     headlineLevel: 3,
     toText (block /*: LineItemBlock */) /*: string */ {
-      return '### ' + linesToText(block.items, true)
+      return '### ' + linesToText(block.items, false)
     },
   },
   H4: {
     headline: true,
     headlineLevel: 4,
     toText (block /*: LineItemBlock */) /*: string */ {
-      return '#### ' + linesToText(block.items, true)
+      return '#### ' + linesToText(block.items, false)
     },
   },
   H5: {
     headline: true,
     headlineLevel: 5,
     toText (block /*: LineItemBlock */) /*: string */ {
-      return '##### ' + linesToText(block.items, true)
+      return '##### ' + linesToText(block.items, false)
     },
   },
   H6: {
     headline: true,
     headlineLevel: 6,
     toText (block /*: LineItemBlock */) /*: string */ {
-      return '###### ' + linesToText(block.items, true)
+      return '###### ' + linesToText(block.items, false)
     },
   },
   TOC: {

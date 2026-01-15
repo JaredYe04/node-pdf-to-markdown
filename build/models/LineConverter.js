@@ -17,22 +17,42 @@ module.exports = class LineConverter {
 
   // returns a CombineResult
   compact (textItems /*: TextItem[] */) /*: LineItem */ {
+    // Filter out invalid items
+    const validItems = textItems.filter(item => item && typeof item === 'object' && typeof item.x === 'number')
+    
+    if (validItems.length === 0) {
+      // Return a minimal LineItem if no valid items
+      return new LineItem({
+        x: 0,
+        y: 0,
+        height: 0,
+        width: 0,
+        words: [],
+        parsedElements: new ParsedElements({
+          footnoteLinks: [],
+          footnotes: [],
+          containLinks: false,
+          formattedWords: 0,
+        }),
+      })
+    }
+    
     // we can't trust order of occurence, esp. footnoteLinks like to come last
-    sortByX(textItems)
+    sortByX(validItems)
 
     const wordStream = new WordDetectionStream(this.fontToFormats)
-    wordStream.consumeAll(textItems.map(item => new TextItem({ ...item })))
+    wordStream.consumeAll(validItems.map(item => new TextItem({ ...item })))
     const words = wordStream.complete()
 
     var maxHeight = 0
     var widthSum = 0
-    textItems.forEach(item => {
-      maxHeight = Math.max(maxHeight, item.height)
-      widthSum += item.width
+    validItems.forEach(item => {
+      maxHeight = Math.max(maxHeight, item.height || 0)
+      widthSum += (item.width || 0)
     })
     return new LineItem({
-      x: textItems[0].x,
-      y: textItems[0].y,
+      x: validItems[0].x,
+      y: validItems[0].y,
       height: maxHeight,
       width: widthSum,
       words: words,
@@ -66,10 +86,22 @@ class WordDetectionStream extends StashingStream {
   }
 
   onPushOnStash (item) { // eslint-disable-line no-unused-vars
-    this.stashedNumber = isNumber(item.text.trim())
+    // Only process TextItems, skip ImageItems
+    if (item && item.text && typeof item.text === 'string') {
+      this.stashedNumber = isNumber(item.text.trim())
+    } else {
+      this.stashedNumber = false
+    }
   }
 
   doMatchesStash (lastItem, item) {
+    // Only process TextItems, skip ImageItems
+    if (!item || !item.text || typeof item.text !== 'string') {
+      return false
+    }
+    if (!lastItem || !lastItem.text || typeof lastItem.text !== 'string') {
+      return false
+    }
     const lastItemFormat = this.fontToFormats.get(lastItem.font)
     const itemFormat = this.fontToFormats.get(item.font)
     if (lastItemFormat !== itemFormat) {
@@ -80,33 +112,44 @@ class WordDetectionStream extends StashingStream {
   }
 
   doFlushStash (stash, results) {
+    // Filter out non-TextItems
+    const textItems = stash.filter(item => item && item.text && typeof item.text === 'string')
+    if (textItems.length === 0) {
+      return
+    }
+    
     if (this.stashedNumber) {
-      const joinedNumber = stash.map(item => item.text)
+      const joinedNumber = textItems.map(item => item.text)
         .join('')
         .trim()
-      if (stash[0].y > this.firstY) { // footnote link
+      if (textItems[0].y > this.firstY) { // footnote link
         results.push(new Word({
           string: `${joinedNumber}`,
           type: WordType.FOOTNOTE_LINK,
         }))
         this.footnoteLinks.push(parseInt(joinedNumber))
-      } else if (this.currentItem && this.currentItem.y < stash[0].y) { // footnote
+      } else if (this.currentItem && this.currentItem.y < textItems[0].y) { // footnote
         results.push(new Word({
           string: `${joinedNumber}`,
           type: WordType.FOOTNOTE,
         }))
         this.footnotes.push(joinedNumber)
       } else {
-        this.copyStashItemsAsText(stash, results)
+        this.copyStashItemsAsText(textItems, results)
       }
     } else {
-      this.copyStashItemsAsText(stash, results)
+      this.copyStashItemsAsText(textItems, results)
     }
   }
 
   copyStashItemsAsText (stash, results) {
-    const format = this.fontToFormats.get(stash[0].font)
-    results.push(...this.itemsToWords(stash, format))
+    // Filter out non-TextItems
+    const textItems = stash.filter(item => item && item.text && typeof item.text === 'string')
+    if (textItems.length === 0) {
+      return
+    }
+    const format = this.fontToFormats.get(textItems[0].font)
+    results.push(...this.itemsToWords(textItems, format))
   }
 
   itemsToWords (items, formatName) {

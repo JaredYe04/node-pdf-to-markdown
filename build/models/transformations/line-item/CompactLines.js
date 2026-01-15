@@ -3,6 +3,7 @@
 const ToLineItemTransformation = require('../ToLineItemTransformation')
 const ParseResult = require('../../ParseResult')
 const LineItem = require('../../LineItem')
+const ImageItem = require('../../ImageItem')
 const TextItemLineGrouper = require('../../TextItemLineGrouper')
 const LineConverter = require('../../LineConverter')
 const BlockType = require('../../markdown/BlockType')
@@ -29,7 +30,15 @@ module.exports = class CompactLines extends ToLineItemTransformation {
     parseResult.pages.forEach(page => {
       if (page.items.length > 0) {
         const lineItems = []
-        const textItemsGroupedByLine = lineGrouper.group(page.items)
+        // Separate TextItems and ImageItems
+        const textItems = page.items.filter(item => 
+          !(item instanceof ImageItem || (item.constructor && item.constructor.name === 'ImageItem'))
+        )
+        const imageItems = page.items.filter(item => 
+          item instanceof ImageItem || (item.constructor && item.constructor.name === 'ImageItem')
+        )
+        
+        const textItemsGroupedByLine = lineGrouper.group(textItems)
         textItemsGroupedByLine.forEach(lineTextItems => {
           const lineItem = lineCompactor.compact(lineTextItems)
           if (lineTextItems.length > 1) {
@@ -62,7 +71,55 @@ module.exports = class CompactLines extends ToLineItemTransformation {
             foundFootnotes.push.apply(foundFootnotes, footnotes)
           }
         })
-        page.items = lineItems
+        
+        // Re-insert image items in their original positions
+        // Sort all items (lineItems + imageItems) by Y position
+        const allItems = []
+        
+        // Create array with position info for sorting
+        const itemsWithPos = []
+        
+        // Add line items
+        lineItems.forEach(item => {
+          itemsWithPos.push({
+            item: item,
+            y: item.y || 0,
+            x: item.x || 0
+          })
+        })
+        
+        // Add image items
+        imageItems.forEach(imageItem => {
+          itemsWithPos.push({
+            item: imageItem,
+            y: imageItem.y || 0,
+            x: imageItem.x || 0
+          })
+        })
+        
+        // Sort by Y position (top to bottom), then by X (left to right)
+        itemsWithPos.sort((a, b) => {
+          const aY = (a && typeof a.y === 'number') ? a.y : 0
+          const bY = (b && typeof b.y === 'number') ? b.y : 0
+          const aX = (a && typeof a.x === 'number') ? a.x : 0
+          const bX = (b && typeof b.x === 'number') ? b.x : 0
+          
+          if (Math.abs(aY - bY) > 5) {
+            return bY - aY // Higher Y value is higher on page
+          }
+          return aX - bX
+        })
+        
+        // Extract items in sorted order
+        page.items = itemsWithPos.map(i => i.item)
+        
+        // Debug: verify ImageItems are preserved
+        const finalImageCount = page.items.filter(item => 
+          item && typeof item === 'object' && (item.imageData || item.constructor?.name === 'ImageItem')
+        ).length
+        if (imageItems.length > 0 && finalImageCount !== imageItems.length) {
+          console.warn(`CompactLines: Page ${page.index + 1} - Lost ImageItems! Had ${imageItems.length}, now have ${finalImageCount}`)
+        }
       }
     })
 

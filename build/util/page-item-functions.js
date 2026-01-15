@@ -7,10 +7,17 @@ import LineItemBlock from '../models/LineItemBlock'
 
 exports.minXFromBlocks = function minXFromBlocks(blocks /*: LineItemBlock[] */) /*: number */ {
     var minX = 999
+    if (!blocks || !Array.isArray(blocks)) {
+        return null
+    }
     blocks.forEach(block => {
-        block.items.forEach(item => {
-            minX = Math.min(minX, item.x)
-        })
+        if (block && block.items && Array.isArray(block.items)) {
+            block.items.forEach(item => {
+                if (item && typeof item.x === 'number') {
+                    minX = Math.min(minX, item.x)
+                }
+            })
+        }
     })
     if (minX === 999) {
         return null
@@ -20,8 +27,13 @@ exports.minXFromBlocks = function minXFromBlocks(blocks /*: LineItemBlock[] */) 
 
 exports.minXFromPageItems = function minXFromPageItems(items /*: PageItem */) /*: number */ {
     var minX = 999
+    if (!items || !Array.isArray(items)) {
+        return null
+    }
     items.forEach(item => {
-        minX = Math.min(minX, item.x)
+        if (item && typeof item.x === 'number') {
+            minX = Math.min(minX, item.x)
+        }
     })
     if (minX === 999) {
         return null
@@ -30,5 +42,12 @@ exports.minXFromPageItems = function minXFromPageItems(items /*: PageItem */) /*
 }
 
 exports.sortByX = function sortByX(items /*: PageItem */) {
-    items.sort((a, b) => a.x - b.x)
+    if (!items || !Array.isArray(items)) {
+        return
+    }
+    items.sort((a, b) => {
+        const aX = (a && typeof a.x === 'number') ? a.x : 0
+        const bX = (b && typeof b.x === 'number') ? b.x : 0
+        return aX - bX
+    })
 }
