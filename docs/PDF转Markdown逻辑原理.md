@@ -298,7 +298,7 @@ const transformations = [
 ## 使用示例
 
 ```javascript
-const pdf2md = require('pdf2md-ts')
+const pdf2md = require('node-pdf-to-markdown')
 const fs = require('fs')
 
 const pdfBuffer = fs.readFileSync('document.pdf')

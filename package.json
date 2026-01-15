@@ -1,5 +1,5 @@
 {
-    "name": "pdf2md-ts",
+    "name": "node-pdf-to-markdown",
     "version": "1.1.1",
     "description": "Convert pdf to markdown, support typescript",
     "main": "build/pdf2md.js",
@@ -31,7 +31,11 @@
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/uni-openai/pdf2md.git"
+        "url": "https://github.com/JaredYe04/node-pdf-to-markdown"
+    },
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
     },
     "dependencies": {
         "enumify": "^1.0.4",

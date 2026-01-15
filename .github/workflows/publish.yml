@@ -67,7 +67,7 @@ jobs:
           
           # 获取 npm 上的最新版本
           echo "🔍 Checking npm registry for latest version..."
-          NPM_VERSION=$(npm view pdf2md-ts version 2>/dev/null || echo "")
+          NPM_VERSION=$(npm view node-pdf-to-markdown version 2>/dev/null || echo "")
           
           if [ -z "$NPM_VERSION" ]; then
             echo "📦 No existing version on npm, starting fresh"
@@ -125,7 +125,7 @@ jobs:
           echo "🆕 New version after increment: $NEW_VERSION"
           
           # 检查 npm 上是否已存在该版本
-          if npm view pdf2md-ts@$NEW_VERSION version > /dev/null 2>&1; then
+          if npm view node-pdf-to-markdown@$NEW_VERSION version > /dev/null 2>&1; then
             echo "⚠️  Version $NEW_VERSION already exists on npm"
             echo "🔄 Attempting to increment again..."
             # 再次递增版本
@@ -134,7 +134,7 @@ jobs:
             echo "🆕 Updated version: $NEW_VERSION"
             
             # 再次检查
-            if npm view pdf2md-ts@$NEW_VERSION version > /dev/null 2>&1; then
+            if npm view node-pdf-to-markdown@$NEW_VERSION version > /dev/null 2>&1; then
               echo "❌ Error: Version $NEW_VERSION also exists on npm."
               echo "💡 Please manually update package.json to a version higher than the latest npm version."
               if [ -n "$NPM_VERSION" ]; then
@@ -154,7 +154,7 @@ jobs:
           echo "Release version: $VERSION"
           
           # 检查 npm 上是否已存在该版本
-          if npm view pdf2md-ts@$VERSION version > /dev/null 2>&1; then
+          if npm view node-pdf-to-markdown@$VERSION version > /dev/null 2>&1; then
             echo "⚠️  Warning: Version $VERSION already exists on npm"
             echo "Using --allow-same-version to update package.json"
           fi
@@ -168,7 +168,7 @@ jobs:
           echo "📦 Preparing to publish version: $VERSION"
           
           # 最终检查：确保版本不存在
-          if npm view pdf2md-ts@$VERSION version > /dev/null 2>&1; then
+          if npm view node-pdf-to-markdown@$VERSION version > /dev/null 2>&1; then
             echo "❌ Error: Version $VERSION already exists on npm registry"
             echo "Cannot publish duplicate version. Please update package.json with a new version."
             exit 1
@@ -183,10 +183,29 @@ jobs:
       # - name: Run tests
       #   run: npm test
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Verify NPM authentication
+        run: |
+          echo "🔍 Verifying npm authentication..."
+          npm whoami || {
+            echo "❌ Error: Not authenticated to npm"
+            echo "💡 Please ensure NPM_TOKEN secret is configured in GitHub repository secrets:"
+            echo "   1. Go to Settings > Secrets and variables > Actions"
+            echo "   2. Add a new secret named NPM_TOKEN"
+            echo "   3. Use your npm access token (create at https://www.npmjs.com/settings/YOUR_USERNAME/tokens)"
+            echo "   4. Token must have 'Automation' type for publishing"
+            exit 1
+          }
+          echo "✅ Successfully authenticated to npm"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm
+        run: |
+          echo "📦 Publishing to npm..."
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: false
 
       - name: Create Git tag and push (workflow_dispatch)
         if: github.event_name == 'workflow_dispatch'

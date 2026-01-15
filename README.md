@@ -1,8 +1,10 @@
-# 📄 pdf2md-ts
+# 📄 node-pdf-to-markdown
 
 > **Powerful PDF to Markdown Converter with Intelligent Text Recognition and Image Processing**
 
-[![npm version](https://img.shields.io/npm/v/pdf2md-ts)](https://www.npmjs.com/package/pdf2md-ts)[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)[![Node.js](https://img.shields.io/badge/node-%3E%3D12-green.svg)](https://nodejs.org/)
+[![npm version](https://img.shields.io/npm/v/node-pdf-to-markdown)](https://www.npmjs.com/package/node-pdf-to-markdown)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D12-green.svg)](https://nodejs.org/)
 
 A powerful PDF to Markdown converter with intelligent text recognition and flexible image processing. This project is a fork and enhancement of [@opendocsg/pdf2md](https://www.npmjs.com/package/@opendocsg/pdf2md), with added TypeScript support, image processing capabilities, and batch conversion tools.
 
@@ -30,9 +32,9 @@ A powerful PDF to Markdown converter with intelligent text recognition and flexi
 ## 📦 Installation
 
 ```bash
-npm install pdf2md-ts
+npm install node-pdf-to-markdown
 # or
-yarn add pdf2md-ts
+yarn add node-pdf-to-markdown
 ```
 
 ---
@@ -45,7 +47,7 @@ yarn add pdf2md-ts
 
 ```javascript
 const fs = require('fs')
-const pdf2md = require('pdf2md-ts')
+const pdf2md = require('node-pdf-to-markdown')
 
 const pdfBuffer = fs.readFileSync('document.pdf')
 pdf2md(pdfBuffer)
@@ -60,7 +62,7 @@ pdf2md(pdfBuffer)
 **ES6 & TypeScript**
 
 ```typescript
-import pdf2md from 'pdf2md-ts'
+import pdf2md from 'node-pdf-to-markdown'
 import { readFileSync } from 'fs'
 
 const buffer = readFileSync('document.pdf')
@@ -365,9 +367,9 @@ MIT License
 ## 📦 安装
 
 ```bash
-npm install pdf2md-ts
+npm install node-pdf-to-markdown
 # 或
-yarn add pdf2md-ts
+yarn add node-pdf-to-markdown
 ```
 
 ---
@@ -380,7 +382,7 @@ yarn add pdf2md-ts
 
 ```javascript
 const fs = require('fs')
-const pdf2md = require('pdf2md-ts')
+const pdf2md = require('node-pdf-to-markdown')
 
 const pdfBuffer = fs.readFileSync('document.pdf')
 pdf2md(pdfBuffer)
@@ -395,7 +397,7 @@ pdf2md(pdfBuffer)
 **ES6 & TypeScript**
 
 ```typescript
-import pdf2md from 'pdf2md-ts'
+import pdf2md from 'node-pdf-to-markdown'
 import { readFileSync } from 'fs'
 
 const buffer = readFileSync('document.pdf')
