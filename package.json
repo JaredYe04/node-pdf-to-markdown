@@ -6,7 +6,8 @@
     "types": "types/pdf2md.d.ts",
     "files": [
         "build",
-        "types"
+        "types",
+        "scripts"
     ],
     "scripts": {
         "preinstall": "node scripts/preinstall.js",
