@@ -41,6 +41,9 @@
         "enumify": "^1.0.4",
         "pdfjs-dist": "^3.11.174"
     },
+    "optionalDependencies": {
+        "canvas": "^2.11.2"
+    },
     "devDependencies": {
         "@opengovsg/eslint-config-opengovsg": "^1.0.6",
         "babel-eslint": "^10.0.2",
