@@ -9,6 +9,8 @@
         "types"
     ],
     "scripts": {
+        "preinstall": "node scripts/preinstall.js",
+        "postinstall": "node scripts/preinstall.js",
         "lint": "eslint lib --cache",
         "test": "mocha test --recursive",
         "test:watch": "mocha test --recursive --watch",
@@ -40,9 +42,6 @@
     "dependencies": {
         "enumify": "^1.0.4",
         "pdfjs-dist": "^3.11.174"
-    },
-    "optionalDependencies": {
-        "canvas": "^2.11.2"
     },
     "devDependencies": {
         "@opengovsg/eslint-config-opengovsg": "^1.0.6",
